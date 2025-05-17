@@ -50,5 +50,5 @@ void music_toggle(void)
 
 void music_volume(char volume)
 {
-	*(volatile char *)0xa15d = volume;
+	*(volatile char*)0xD418 = volume;
 }

@@ -28,11 +28,16 @@
 #include "status.h"
 #include "intro.h"
 
+#define NOP __asm{nop}
+#define SEI __asm{sei}
+#define CLI __asm{cli}
+
 static char LevelText[] = S"STAGE 1";
 static char GameOverText[] = S"GAMEOVER";
 
 bool	trainer_mode, level_skip, level_retry, restart;
 bool	cheating;
+bool    second_fire, previous_second_fire;
 
 struct Level
 {
@@ -69,6 +74,33 @@ const char PausedColors[] = {
 	VCOL_PURPLE, VCOL_RED, VCOL_ORANGE, VCOL_YELLOW,
 	VCOL_ORANGE, VCOL_RED, VCOL_PURPLE, VCOL_BLUE
 };
+
+void check_second_fire(void)
+{
+	byte* JoyReg = (byte*)0xDC00;
+	byte* CtrlPort = (byte*)0xD419;
+	byte b;
+
+	previous_second_fire = second_fire;
+
+	SEI
+	JoyReg[2] = 0xC0;
+	NOP
+	b = JoyReg[0];
+	b = b & 0b00111111;
+	b = b | 0b10000000;
+	JoyReg[0] = b;
+	for (byte c = 0; c < 20; c++)
+		NOP
+	
+	b = CtrlPort[0];
+	CLI
+	if (b < 16) second_fire = true;
+	else second_fire = false;
+	JoyReg[0] = 0x7F;
+	JoyReg[2] = 0xFF;
+}
+
 
 void game_pause(void)
 {
@@ -107,6 +139,12 @@ void game_pause(void)
 		keyb_poll();
 		if (keyb_key == (KSCAN_SPACE | KSCAN_QUAL_DOWN))
 			break;
+
+		// ... or second fire to continue
+		check_second_fire();
+		if (second_fire && !previous_second_fire)
+			break;
+
 	}
 
 	// Hide pause text sprited
@@ -161,7 +199,12 @@ void game_keyboard(void)
 
 		}
 	}
+	//check Second Fire
+	check_second_fire();
+	if (second_fire && !previous_second_fire)
+		game_pause();
 }
+
 
 void game_play(void)
 {
